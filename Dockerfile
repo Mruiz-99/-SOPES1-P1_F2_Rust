@@ -10,5 +10,9 @@ COPY . .
 RUN cargo build --release
 
 EXPOSE 2000
+ENV DATABASE_URL mongodb://admindb:1234@35.209.237.73:27017
+ENV DATABASE_NAME fase2
+ENV USER_COLLECTION_NAME fase2
+ENV SERVER_URL 0.0.0.0:2000
 # Run the web service on container startup.
 CMD ["cargo","run"]
