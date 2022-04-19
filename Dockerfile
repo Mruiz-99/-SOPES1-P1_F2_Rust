@@ -1,6 +1,7 @@
 
 FROM debian:bullseye-slim
 WORKDIR /
+RUN apt update
 RUN apt install wget
 RUN wget "https://github.com/Mruiz-99/SOPES1_Rust_P1/releases/latest/download/api"
 
