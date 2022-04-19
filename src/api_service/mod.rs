@@ -2,17 +2,10 @@
 use bson::{doc, Document};
 use mongodb::{options::FindOptions};
 use mongodb::{Collection};
-use serde::{Deserialize, Serialize};
 // External constructors
-extern crate serde;
 extern crate serde_json;
 
-// Estructure data for DB
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Data {
-    pub title: String,
-    pub author: String,
-}
+
 
 // Reference colection clone
 #[derive(Clone)]
@@ -50,11 +43,4 @@ impl ApiService {
         Ok(docs)
     }*/
 
-    // Get documents with quiery
-    pub fn get_by(&self, param: &String) -> std::result::Result<std::vec::Vec<bson::ordered::OrderedDocument>, mongodb::error::Error> {
-        let cursor = self.collection.find(doc! { "author": { "$regex": param } }, None).ok().expect("Failed to execute find.");
-        let docs: Vec<_> = cursor.map(|doc| doc.unwrap()).collect();
-        let _serialized = serde_json::to_string(&docs).unwrap();
-        Ok(docs)
-    }
 }
