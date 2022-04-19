@@ -1,83 +1,114 @@
-// External imports
 use actix_cors::Cors;
-use actix_web::{http, middleware, App, HttpServer};
+use actix_web::{get, http, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{bson::doc};
+use mongodb::sync::{Client, Collection, Cursor};
+use serde::{Deserialize, Serialize};
 use std::env;
-use api_service::ApiService;
 
-// External modules reference
-mod api_router;
-mod api_service;
-
-// Api Service constructor
-pub struct ServiceManager {
-    api: ApiService,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Log {
+    pub juegoid: String,
+    pub cantjugadores: String,
+    pub nombrejuego: String,
+    pub jugadorganador: i32,
+    pub queue: String,
 }
 
-// Api Servie Implementation
-impl ServiceManager {
-    pub fn new(api: ApiService) -> Self {
-        ServiceManager { api }
+fn connect() -> Result<mongodb::sync::Client,mongodb::error::Error> {
+    let mongo_host = std::env::var("MONGO_HOST").unwrap();
+    let mongo_user = std::env::var("MONGO_USER").unwrap();
+    let mongo_pass = std::env::var("MONGO_PASS").unwrap();
+    let conn_string = format!("mongodb://{}:{}@{}:27017/",mongo_user,mongo_pass,mongo_host);
+    println!("Connection String: {}",conn_string);
+    let client = Client::with_uri_str(conn_string)?;
+    return Ok(client);
+}
+
+fn results(collection: &Collection<Log>) -> Result<Cursor<Log>,mongodb::error::Error> {
+    let cursor = collection.find(None, None)?;
+    return Ok(cursor);
+}
+
+
+#[get("/get-logs/")]
+async fn get_logs() -> impl Responder {
+    let mongo_db = std::env::var("MONGO_DB").unwrap();
+    let mongo_collection = std::env::var("MONGO_COLLECTION").unwrap();
+
+    let client = connect().unwrap();
+    let db = client.database(&mongo_db);
+    let collection = db.collection::<Log>(&mongo_collection);
+    let cursor = results(&collection).unwrap();
+    let mut results: Vec<Log> = Vec::new();
+    let mut c = 0;
+    for value in cursor {
+        if c < 30 {
+            results.push(value.unwrap());
+            c += 1;
+        }
+    }
+
+    return HttpResponse::Ok().json(results);
+}
+
+#[get("/get-all/")]
+async fn get_all() -> impl Responder {
+    let mongo_db = std::env::var("MONGO_DB").unwrap();
+    let mongo_collection = std::env::var("MONGO_COLLECTION").unwrap();
+
+    let client = connect().unwrap();
+    let db = client.database(&mongo_db);
+    let collection = db.collection::<Log>(&mongo_collection);
+    let cursor = results(&collection).unwrap();
+    let mut results: Vec<Log> = Vec::new();
+    for value in cursor {
+        results.push(value.unwrap());
+    }
+
+    return HttpResponse::Ok().json(results);
+}
+
+
+
+
+
+fn set_default_env_var(key: &str, value: &str) {
+    if std::env::var(key).is_err() {
+        std::env::set_var(key, value);
     }
 }
 
-// Service Manager constructor
-pub struct AppState {
-    service_manager: ServiceManager,
-}
-
-//mongodb://admindb:1234@localhost:27017
-//mongodb://admindb:1234@35.209.237.73:27017
-
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
-    // init env
+#[actix_web::main]
+async fn main() -> Result<(),std::io::Error>  {
+    // Iniciar env
     dotenv().ok();
 
-    // init logger middleware
+    // Set default Env variables
+    set_default_env_var("MONGO_HOST","35.209.237.73");
+    set_default_env_var("MONGO_USER","admindb");
+    set_default_env_var("MONGO_PASS","1234");
+    set_default_env_var("MONGO_DB","fase2");
+    set_default_env_var("MONGO_COLLECTION","fase2");
+    set_default_env_var("PORT","8080");
+
+    let port = std::env::var("PORT").unwrap();
+    let iport:u16 = port.parse().unwrap();
+    
     env::set_var("RUST_LOG", "actix_web=debug,actix_server=info");
     env_logger::init();
 
-    // Parse a connection string into an options struct.
-    let database_url = env::var("DATABASE_URL").expect("DATABASE URL is not in .env file");
-    let client_options = ClientOptions::parse(&database_url).unwrap();
+    HttpServer::new(|| {
+        let cors = Cors::permissive()
+            .allowed_methods(vec!["GET","POST"])
+            .allowed_header(http::header::CONTENT_TYPE);
 
-    // Get the reference to Mongo DB
-    let client = Client::with_options(client_options).unwrap();
-
-    // get the reference to the Data Base
-    let database_name = env::var("DATABASE_NAME").expect("DATABASE NAME is not in .env file");
-    let db = client.database(&database_name);
-
-    // get the reference to the Collection
-    let user_collection_name = env::var("USER_COLLECTION_NAME").expect("COLLECTION NAME is not in .env file");
-    let user_collection = db.collection(&user_collection_name);
-
-    // Gte the server URL
-    let server_url = env::var("SERVER_URL").expect("SERVER URL is not in .env file");
-
-    // Start the server
-    HttpServer::new(move || {
-        let user_service_worker = ApiService::new(user_collection.clone());
-        let service_manager = ServiceManager::new(user_service_worker);
-
-        // cors
-        let cors_middleware = Cors::new()
-            .allowed_methods(vec!["GET", "POST", "DELETE", "PUT"])
-            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
-            .allowed_header(http::header::CONTENT_TYPE)
-            .max_age(3600)
-            .finish();
-
-        // Init http server
         App::new()
-            .wrap(cors_middleware)
-            .wrap(middleware::Logger::default())
-            .data(AppState { service_manager })
-            .configure(api_router::init)
+            .wrap(cors)
+            .service(get_logs)
+            .service(get_all)
     })
-    .bind(server_url)?
+    .bind(("0.0.0.0",iport))?
     .run()
     .await
 }

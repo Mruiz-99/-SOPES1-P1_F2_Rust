@@ -1,5 +1,4 @@
-# Use the official Rust image.
-# https://hub.docker.com/_/rust
+
 FROM rust:1.60.0
 
 # Copy local code to the container image.
