@@ -2,7 +2,7 @@
 FROM debian:bullseye-slim
 WORKDIR /
 RUN apt-get update
-RUN apt-get install wget
+RUN apt-get install wget -y
 RUN wget "https://github.com/Mruiz-99/SOPES1_Rust_P1/releases/latest/download/api"
 
 ENV DATABASE_URL mongodb://admindb:1234@35.209.237.73:27017
